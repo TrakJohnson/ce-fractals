@@ -1,0 +1,18 @@
+{
+    "rom": "84pce_515.rom",
+    "transfer_files": [
+        "bin/FRACT.8xp"
+    ],
+    "target": {
+        "name": "FRACT",
+        "isAsm": true
+    },
+    "sequence": [
+        "action|launch",
+        "delay|2000",
+        "key|right", ,
+        "delay|2000",
+        "key|left"
+    ],
+    "hashes": []
+}
