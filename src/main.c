@@ -41,7 +41,7 @@ void print_main_menu() {
   const int text_y_pos = 10;
   const int top_line_y = text_y_pos + box_padding + TITLE_FONT_HEIGHT;
   const char *bottom_messages[3] = {
-    "Clear to exit", "Arrows to navigate", "Enter to start"
+    "Clear to exit", "<> to navigate", "Enter to start"
   };
 
 /* Header */
@@ -82,20 +82,21 @@ void update_fractal_choice() {
 }
 
 
-
 /* math stuff */
-int diverges_julia(float x, float y) { //, float cx, float cy) { TODO add these as args
-  float a, b, t, u, cx, cy;
+int calculate_divergence(float x, float y, float cx, float cy, char* fractal_type) {
+  float a, b, t, u;
   int n;
-  cx = -0.79;
-  cy = 0.15;
   a = (x - LCD_WIDTH/2) / 80;
   b = (y - LCD_HEIGHT/2) / 80;
-  /* a = (x - LCD_WIDTH) */
+  if (strcmp(fractal_type, "Mandelbrot") == 0) {
+    cx = a;
+    cy = b;
+  }
   for (n = 0; n < MAX_ITER; n++) {
     u = a * a;
     t = b * b;
     if (u + t > 4) {
+      // |z|<2 => |z| doesn't converge, return the steps for color
       return n;
     }
     b = 2 * a * b + cy;
@@ -104,33 +105,7 @@ int diverges_julia(float x, float y) { //, float cx, float cy) { TODO add these 
   return 0;
 }
 
-
-
-/* int calculate_divergence(float x, float y, float cx, float cy) { */
-
-/* } */
-
-int diverges_mandelbrot(float x, float y) {
-  // x and y are pixel coordinates
-  float a, b, cx, cy, t, u;
-  int n;
-  a = cx = (x - LCD_WIDTH/2) / 80;
-  b = cy = (y - LCD_HEIGHT/2) / 80;
-  for (n = 0; n < MAX_ITER; n++) {
-    u = a * a;
-    t = b * b;
-    if (u + t > 4) {
-      // |z|<2 => |z| doesn't converge
-      // returns in how many steps (for color)
-      return n;
-    }
-    b = 2 * a * b + cy;
-    a = u - t + cx;
-  }
-  return 0;
-}
-
-void draw_fractal(bool is_mandelbrot) {  // TODO: add color argument
+void draw_fractal(char* fractal_type) {  // TODO: add color argument
   uint8_t current_color;
   int x, y, diverges_in;
   /* float a, b, cx, cy, t, u; */
@@ -141,15 +116,13 @@ void draw_fractal(bool is_mandelbrot) {  // TODO: add color argument
     for (y = 0; y < LCD_HEIGHT && kb_Data[6] != kb_Clear; y++) {
       kb_Scan();
       /* diverges_in = diverges_mandelbrot(x, y); */
-      if (is_mandelbrot) {
-        diverges_in = diverges_mandelbrot(x, y);
-      } else {
-        diverges_in = diverges_julia(x, y);
-      }
+      // TODO find good c value
+      // −0.835 − 0.2321
+      diverges_in = calculate_divergence(x, y, -0.835, -0.2321, fractal_type);
+
       if (diverges_in != 0) {
         gfx_SetColor(0xFF); // inside of the fractal
       } else {
-        // coloring
         gfx_SetColor(diverges_in);
       }
       gfx_SetPixel(x, y);
@@ -192,16 +165,9 @@ int main(void) {
       gfx_End();
       return 0;
     }
-  } while (kb_Data[1] != kb_2nd);
+  } while (kb_Data[6] != kb_Enter);
 
-  switch(selected_choice_idx) {
-  case 0:
-    draw_fractal(true);  // 7 min
-    break;
-  case 1:
-    draw_fractal(false);
-    break;
-  }
+  draw_fractal(choices[selected_choice_idx]);
 
   while (!os_GetCSC());
   gfx_End();
