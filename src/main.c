@@ -22,6 +22,8 @@ const char *choices[2] = {"Mandelbrot", "Julia"};
 uint8_t selected_choice_idx = 0;
 // similar file https://tiplanet.org/forum/archives/zipview.php?id=650118&zipFileID=1
 
+/* utils */
+
 int cyclic_var_shift(int v, int direction, int max_val) {
   if (v == 0 && direction == -1) {
     return max_val;
@@ -32,9 +34,44 @@ int cyclic_var_shift(int v, int direction, int max_val) {
   }
 }
 
-/* Menu drawing functions */
-// TODO make that global ?
-void draw_fractal_choice() {
+/* GUI */
+void print_main_menu() {
+  const char *title = "Fractal Generator";
+  const int box_padding = 10;
+  const int text_y_pos = 10;
+  const int top_line_y = text_y_pos + box_padding + TITLE_FONT_HEIGHT;
+  const char *bottom_messages[3] = {
+    "Clear to exit", "Arrows to navigate", "Enter to start"
+  };
+
+/* Header */
+  gfx_SetColor(gfx_blue);
+  gfx_Line(0, top_line_y, LCD_WIDTH, top_line_y);
+  // Text
+  gfx_SetTextFGColor(222);
+  /* gfx_SetFontHeight(TITLE_FONT_HEIGHT); */
+  /* gfx_SetFontSpacing(10); */
+  gfx_PrintStringXY(title, (LCD_WIDTH - gfx_GetStringWidth(title)) / 2, text_y_pos);
+
+  /* Footer */
+  /* gfx_SetFontHeight(SMALL_FONT_HEIGHT); */
+  gfx_PrintStringXY(bottom_messages[0], 0, LCD_HEIGHT - SMALL_FONT_HEIGHT);
+  gfx_PrintStringXY(bottom_messages[1],
+                    (LCD_WIDTH - gfx_GetStringWidth(bottom_messages[1])) / 2,
+                    LCD_HEIGHT - SMALL_FONT_HEIGHT);
+  gfx_PrintStringXY(bottom_messages[2],
+                    LCD_WIDTH - gfx_GetStringWidth(bottom_messages[2]),
+                    LCD_HEIGHT - SMALL_FONT_HEIGHT);
+
+  /* Main text */
+  // TODO: add while loop here, simplify all this DRY
+  gfx_PrintStringXY("< Selected mode >",
+                    (LCD_WIDTH - gfx_GetStringWidth("< Selected mode >"))/2,
+                    (LCD_HEIGHT/2 - NORMAL_FONT_HEIGHT));
+
+}
+
+void update_fractal_choice() {
   gfx_SetColor(0);
   // erase old text
   gfx_FillRectangle(0, (LCD_HEIGHT/2 + NORMAL_FONT_HEIGHT), LCD_WIDTH, NORMAL_FONT_HEIGHT);
@@ -44,7 +81,10 @@ void draw_fractal_choice() {
                     (LCD_HEIGHT/2 + NORMAL_FONT_HEIGHT));
 }
 
-int diverges_julia(float x, float y) { //, float cx, float cy) {
+
+
+/* math stuff */
+int diverges_julia(float x, float y) { //, float cx, float cy) { TODO add these as args
   float a, b, t, u, cx, cy;
   int n;
   cx = -0.79;
@@ -63,6 +103,12 @@ int diverges_julia(float x, float y) { //, float cx, float cy) {
   }
   return 0;
 }
+
+
+
+/* int calculate_divergence(float x, float y, float cx, float cy) { */
+
+/* } */
 
 int diverges_mandelbrot(float x, float y) {
   // x and y are pixel coordinates
@@ -103,10 +149,8 @@ void draw_fractal(bool is_mandelbrot) {  // TODO: add color argument
       if (diverges_in != 0) {
         gfx_SetColor(0xFF); // inside of the fractal
       } else {
-        dbg_sprintf(dbgout, "Color %d was passed", current_color);
-        /* current_color = 256 - (MAX_ITER - n) * 16; */
-        gfx_SetColor(gfx_Darken(0xFF, MAX_ITER - diverges_in));
-        /* gfx_RGBTo1555(current_color, current_color, current_color)); */
+        // coloring
+        gfx_SetColor(diverges_in);
       }
       gfx_SetPixel(x, y);
     }
@@ -114,13 +158,6 @@ void draw_fractal(bool is_mandelbrot) {  // TODO: add color argument
 }
 
 int main(void) {
-  const char *title = "Fractal Generator";
-  const int box_padding = 10;
-  const int text_y_pos = 10;
-  const int top_line_y = text_y_pos + box_padding + TITLE_FONT_HEIGHT;
-  const char *bottom_messages[3] = {
-    "Clear to exit", "Arrows to navigate", "2nd to start"
-  };
   // input detection
   bool right;
   bool left;
@@ -128,47 +165,18 @@ int main(void) {
   int8_t prevKey;
 
   dbg_sprintf(dbgout, "This is the start of a CEmu debugging test\n");
-  /* int var = 10; */
-  /* unsigned code = 3; */
-  /* dbg_sprintf(dbgout, "Initialized some things...\n"); */
-  /* dbg_sprintf(dbgout, "var value: %d\n", var); */
-  /* dbg_sprintf(dbgerr, "PROGRAM ABORTED (code = %u)\n", code); */
 
   /* Seed the random numbers */
   srand(rtc_Time());
   gfx_Begin();
   gfx_FillScreen(gfx_black);
 
-  /* Header */
-  gfx_SetColor(gfx_blue);
-  gfx_Line(0, top_line_y, LCD_WIDTH, top_line_y);
-  // Text
-  gfx_SetTextFGColor(222);
-  /* gfx_SetFontHeight(TITLE_FONT_HEIGHT); */
-  /* gfx_SetFontSpacing(10); */
-  gfx_PrintStringXY(title, (LCD_WIDTH - gfx_GetStringWidth(title)) / 2, text_y_pos);
+  print_main_menu();
+  update_fractal_choice();
 
-  /* Footer */
-  /* gfx_SetFontHeight(SMALL_FONT_HEIGHT); */
-  gfx_PrintStringXY(bottom_messages[0], 0, LCD_HEIGHT - SMALL_FONT_HEIGHT);
-  gfx_PrintStringXY(bottom_messages[1],
-                    (LCD_WIDTH - gfx_GetStringWidth(bottom_messages[1])) / 2,
-                    LCD_HEIGHT - SMALL_FONT_HEIGHT);
-  gfx_PrintStringXY(bottom_messages[2],
-                    LCD_WIDTH - gfx_GetStringWidth(bottom_messages[2]),
-                    LCD_HEIGHT - SMALL_FONT_HEIGHT);
-
-  /* Main text */
-  // TODO: add while loop here, simplify all this DRY
-  gfx_PrintStringXY("< Selected mode >",
-                    (LCD_WIDTH - gfx_GetStringWidth("< Selected mode >"))/2,
-                    (LCD_HEIGHT/2 - NORMAL_FONT_HEIGHT));
-
-  draw_fractal_choice();
-
-  /* Wait for key */
   prevKey = 0;  // needed to avoid repetitions
   do {
+    // Check for arrows
     arrows = kb_Data[7];
     right = arrows & kb_Right;
     left = arrows & kb_Left;
@@ -176,14 +184,19 @@ int main(void) {
       // maxval is the number of elements minus one
       selected_choice_idx = cyclic_var_shift(selected_choice_idx, right ? 1 : -1, 1);
       dbg_sprintf(dbgout, "Current index %d", selected_choice_idx);
-      draw_fractal_choice();
+      update_fractal_choice();
     }
     prevKey = right ? 1 : (left ? -1 : 0);  // must do that here to avoid repetitions
+    // check for exit
+    if (kb_Data[6] & kb_Clear) {
+      gfx_End();
+      return 0;
+    }
   } while (kb_Data[1] != kb_2nd);
 
   switch(selected_choice_idx) {
   case 0:
-    draw_fractal(true);
+    draw_fractal(true);  // 7 min
     break;
   case 1:
     draw_fractal(false);
