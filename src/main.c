@@ -13,17 +13,17 @@
 #include <debug.h>
 #include <assert.h>
 
-#define MAX_ITER 16
+#define MAX_ITER 32
 #define TITLE_FONT_HEIGHT 8
 #define NORMAL_FONT_HEIGHT 8
 #define SMALL_FONT_HEIGHT 8
 
+
+
 const char *choices[2] = {"Mandelbrot", "Julia"};
 uint8_t selected_choice_idx = 0;
-// similar file https://tiplanet.org/forum/archives/zipview.php?id=650118&zipFileID=1
 
 /* utils */
-
 int cyclic_var_shift(int v, int direction, int max_val) {
   if (v == 0 && direction == -1) {
     return max_val;
@@ -97,7 +97,7 @@ int calculate_divergence(float x, float y, float cx, float cy, char* fractal_typ
     t = b * b;
     if (u + t > 4) {
       // |z|<2 => |z| doesn't converge, return the steps for color
-      return n;
+      return n + 1;
     }
     b = 2 * a * b + cy;
     a = u - t + cx;
@@ -119,11 +119,11 @@ void draw_fractal(char* fractal_type) {  // TODO: add color argument
       // TODO find good c value
       // −0.835 − 0.2321
       diverges_in = calculate_divergence(x, y, -0.835, -0.2321, fractal_type);
-
-      if (diverges_in != 0) {
+      /* dbg_sprintf(dbgout, "n: %d\n", diverges_in); */
+      if (diverges_in == 0) {
         gfx_SetColor(0xFF); // inside of the fractal
       } else {
-        gfx_SetColor(diverges_in);
+        gfx_SetColor(diverges_in * 8);
       }
       gfx_SetPixel(x, y);
     }
@@ -136,8 +136,6 @@ int main(void) {
   bool left;
   kb_key_t arrows;
   int8_t prevKey;
-
-  dbg_sprintf(dbgout, "This is the start of a CEmu debugging test\n");
 
   /* Seed the random numbers */
   srand(rtc_Time());
@@ -156,11 +154,10 @@ int main(void) {
     if ((left && prevKey != -1) || (right && prevKey != 1)) {
       // maxval is the number of elements minus one
       selected_choice_idx = cyclic_var_shift(selected_choice_idx, right ? 1 : -1, 1);
-      dbg_sprintf(dbgout, "Current index %d", selected_choice_idx);
       update_fractal_choice();
     }
     prevKey = right ? 1 : (left ? -1 : 0);  // must do that here to avoid repetitions
-    // check for exit
+
     if (kb_Data[6] & kb_Clear) {
       gfx_End();
       return 0;
