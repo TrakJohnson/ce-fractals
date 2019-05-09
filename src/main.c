@@ -13,17 +13,31 @@
 #include <debug.h>
 #include <assert.h>
 
-#define MAX_ITER 32
+#define MAX_ITER 16
 #define TITLE_FONT_HEIGHT 8
 #define NORMAL_FONT_HEIGHT 8
 #define SMALL_FONT_HEIGHT 8
 
+// Timing
+// Julia, res 32: 00:16 -> 7:02
+// Julia, res 16:
 
 
 const char *choices[2] = {"Mandelbrot", "Julia"};
 uint8_t selected_choice_idx = 0;
 
+const uint8_t blue_gradient_16[16] = {0, 24, 25, 26, 27, 28, 29, 30, 31, 63, 95, 127, 159, 191, 223, 255};
+const uint8_t orange_gradient_16[16] = {0, 8, 40, 72, 104, 136, 168, 200, 232, 233, 234, 235, 236, 237, 238, 239};
+
 /* utils */
+char* concat(const char *s1, const char *s2) {
+  // https://stackoverflow.com/questions/8465006/how-do-i-concatenate-two-strings-in-c/8465083
+  char *result = malloc(strlen(s1) + strlen(s2) + 1);
+  strcpy(result, s1);
+  strcat(result, s2);
+  return result;
+}
+
 int cyclic_var_shift(int v, int direction, int max_val) {
   if (v == 0 && direction == -1) {
     return max_val;
@@ -44,7 +58,7 @@ void print_main_menu() {
     "Clear to exit", "<> to navigate", "Enter to start"
   };
 
-/* Header */
+  // Header
   gfx_SetColor(gfx_blue);
   gfx_Line(0, top_line_y, LCD_WIDTH, top_line_y);
   // Text
@@ -62,28 +76,25 @@ void print_main_menu() {
   gfx_PrintStringXY(bottom_messages[2],
                     LCD_WIDTH - gfx_GetStringWidth(bottom_messages[2]),
                     LCD_HEIGHT - SMALL_FONT_HEIGHT);
-
-  /* Main text */
-  // TODO: add while loop here, simplify all this DRY
-  gfx_PrintStringXY("< Selected mode >",
-                    (LCD_WIDTH - gfx_GetStringWidth("< Selected mode >"))/2,
-                    (LCD_HEIGHT/2 - NORMAL_FONT_HEIGHT));
-
 }
 
-void update_fractal_choice() {
-  gfx_SetColor(0);
-  // erase old text
-  gfx_FillRectangle(0, (LCD_HEIGHT/2 + NORMAL_FONT_HEIGHT), LCD_WIDTH, NORMAL_FONT_HEIGHT);
+void print_select_block(int y_top, bool first_draw, char *description, const char *selected_value) {
+  // Print description
+  char *complete_desc = concat(concat("< ", description), " >"); // TODO this is stupid
+  if (first_draw) {
+    gfx_SetTextFGColor(222);
+    gfx_PrintStringXY(complete_desc, (LCD_WIDTH - gfx_GetStringWidth(complete_desc)) / 2, y_top);
+  } else {
+    gfx_SetColor(0);
+    gfx_FillRectangle(0, (y_top + 2 * NORMAL_FONT_HEIGHT), LCD_WIDTH, NORMAL_FONT_HEIGHT);
+  }
   gfx_SetTextFGColor(230);  // light yellow
-  gfx_PrintStringXY(choices[selected_choice_idx],
-                    (LCD_WIDTH - gfx_GetStringWidth(choices[selected_choice_idx]))/2,
-                    (LCD_HEIGHT/2 + NORMAL_FONT_HEIGHT));
+  gfx_PrintStringXY(selected_value, (LCD_WIDTH - gfx_GetStringWidth(selected_value))/2,
+                    (y_top + 2 * NORMAL_FONT_HEIGHT));  // line spacing of 1
 }
 
-
-/* math stuff */
-int calculate_divergence(float x, float y, float cx, float cy, char* fractal_type) {
+// Fractal
+int calculate_divergence(float x, float y, float cx, float cy, const char* fractal_type) {
   float a, b, t, u;
   int n;
   a = (x - LCD_WIDTH/2) / 80;
@@ -96,7 +107,7 @@ int calculate_divergence(float x, float y, float cx, float cy, char* fractal_typ
     u = a * a;
     t = b * b;
     if (u + t > 4) {
-      // |z|<2 => |z| doesn't converge, return the steps for color
+      // |z| < 2 => (|z| doesn't converge), return the steps for color
       return n + 1;
     }
     b = 2 * a * b + cy;
@@ -105,31 +116,39 @@ int calculate_divergence(float x, float y, float cx, float cy, char* fractal_typ
   return 0;
 }
 
-void draw_fractal(char* fractal_type) {  // TODO: add color argument
-  uint8_t current_color;
-  int x, y, diverges_in;
-  /* float a, b, cx, cy, t, u; */
+void draw_fractal(const char* fractal_type) {  // TODO: add color argument
+  uint8_t current_color, previous_color, diverges_in;
+  int x, y, previous_y_checkpoint;
+  previous_y_checkpoint = 0;
+  previous_color = 0;
 
   gfx_FillScreen(gfx_black);
   gfx_SetColor(0xFF);
   for (x = 0; x < LCD_WIDTH; x++) {
     for (y = 0; y < LCD_HEIGHT && kb_Data[6] != kb_Clear; y++) {
       kb_Scan();
-      /* diverges_in = diverges_mandelbrot(x, y); */
-      // TODO find good c value
-      // −0.835 − 0.2321
+      // TODO allow customizing the starting values
       diverges_in = calculate_divergence(x, y, -0.835, -0.2321, fractal_type);
-      /* dbg_sprintf(dbgout, "n: %d\n", diverges_in); */
-      if (diverges_in == 0) {
-        gfx_SetColor(0xFF); // inside of the fractal
-      } else {
-        gfx_SetColor(diverges_in * 8);
+      current_color = blue_gradient_16[diverges_in];
+      if (current_color != previous_color) {
+        gfx_SetColor(previous_color);
+        gfx_Line(x, previous_y_checkpoint, x, y - 1);
+        previous_y_checkpoint = y;
       }
-      gfx_SetPixel(x, y);
+      previous_color = current_color;
+    }
+    // finish the line to bottom before x++
+    if (previous_y_checkpoint != LCD_HEIGHT - 1) {
+      gfx_SetColor(current_color);
+      gfx_Line(x, previous_y_checkpoint, x, LCD_HEIGHT - 1);
+      previous_y_checkpoint = 0;
     }
   }
 }
-
+// Timer
+// 13:44 -> 22:00 = 7min
+// New
+// 2:25 -> 9:08
 int main(void) {
   // input detection
   bool right;
@@ -140,10 +159,11 @@ int main(void) {
   /* Seed the random numbers */
   srand(rtc_Time());
   gfx_Begin();
+  /* gfx_SetDrawBuffer(); */
   gfx_FillScreen(gfx_black);
 
   print_main_menu();
-  update_fractal_choice();
+  print_select_block(100, true, "Select type", choices[selected_choice_idx]);
 
   prevKey = 0;  // needed to avoid repetitions
   do {
@@ -154,7 +174,7 @@ int main(void) {
     if ((left && prevKey != -1) || (right && prevKey != 1)) {
       // maxval is the number of elements minus one
       selected_choice_idx = cyclic_var_shift(selected_choice_idx, right ? 1 : -1, 1);
-      update_fractal_choice();
+      print_select_block(100, false, "Select type", choices[selected_choice_idx]);
     }
     prevKey = right ? 1 : (left ? -1 : 0);  // must do that here to avoid repetitions
 
