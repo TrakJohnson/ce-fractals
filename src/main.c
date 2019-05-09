@@ -22,12 +22,18 @@
 // Julia, res 32: 00:16 -> 7:02
 // Julia, res 16:
 
+uint8_t selected_block_idx = 0;
 
 const char *choices[2] = {"Mandelbrot", "Julia"};
 uint8_t selected_choice_idx = 0;
 
-const uint8_t blue_gradient_16[16] = {0, 24, 25, 26, 27, 28, 29, 30, 31, 63, 95, 127, 159, 191, 223, 255};
-const uint8_t orange_gradient_16[16] = {0, 8, 40, 72, 104, 136, 168, 200, 232, 233, 234, 235, 236, 237, 238, 239};
+// TODO: modify palette directly to get 256 colors for each gradient
+const uint8_t gradients_16[2][16] = {
+  {0, 24, 25, 26, 27, 28, 29, 30, 31, 63, 95, 127, 159, 191, 223, 255}, // blue
+  {0, 8, 40, 72, 104, 136, 168, 200, 232, 233, 234, 235, 236, 237, 238, 239} // red/yellowish
+};
+const char *gradients_names[2] = {"Blue", "Orange-ish"};
+uint8_t selected_gradient_idx = 1;
 
 /* utils */
 char* concat(const char *s1, const char *s2) {
@@ -78,16 +84,23 @@ void print_main_menu() {
                     LCD_HEIGHT - SMALL_FONT_HEIGHT);
 }
 
-void print_select_block(int y_top, bool first_draw, char *description, const char *selected_value) {
-  // Print description
-  char *complete_desc = concat(concat("< ", description), " >"); // TODO this is stupid
-  if (first_draw) {
-    gfx_SetTextFGColor(222);
-    gfx_PrintStringXY(complete_desc, (LCD_WIDTH - gfx_GetStringWidth(complete_desc)) / 2, y_top);
-  } else {
-    gfx_SetColor(0);
-    gfx_FillRectangle(0, (y_top + 2 * NORMAL_FONT_HEIGHT), LCD_WIDTH, NORMAL_FONT_HEIGHT);
-  }
+void print_select_block(int y_top, bool first_draw, bool is_selected_block,
+                        char *description, const char *selected_value) {
+  char *complete_desc = is_selected_block
+    ? concat(concat("< ", description), " >")  // TODO this seems stupid
+    : description;
+  // TODO restore commented code for smaller redraws (is that important ?)
+  /* if (first_draw) { */
+  /*   gfx_SetTextFGColor(222); */
+  /*   gfx_PrintStringXY(complete_desc, (LCD_WIDTH - gfx_GetStringWidth(complete_desc)) / 2, y_top); */
+  /* } else { */
+  /*   gfx_SetColor(0); */
+  /*   gfx_FillRectangle(0, (y_top + 2 * NORMAL_FONT_HEIGHT), LCD_WIDTH, NORMAL_FONT_HEIGHT); */
+  /* } */
+  gfx_SetColor(0);
+  gfx_FillRectangle(0, y_top, LCD_WIDTH, NORMAL_FONT_HEIGHT * 3);
+  gfx_SetTextFGColor(222);
+  gfx_PrintStringXY(complete_desc, (LCD_WIDTH - gfx_GetStringWidth(complete_desc)) / 2, y_top);
   gfx_SetTextFGColor(230);  // light yellow
   gfx_PrintStringXY(selected_value, (LCD_WIDTH - gfx_GetStringWidth(selected_value))/2,
                     (y_top + 2 * NORMAL_FONT_HEIGHT));  // line spacing of 1
@@ -116,7 +129,7 @@ int calculate_divergence(float x, float y, float cx, float cy, const char* fract
   return 0;
 }
 
-void draw_fractal(const char* fractal_type) {  // TODO: add color argument
+void draw_fractal(const char* fractal_type, uint8_t gradient_idx) {  // TODO: add color argument
   uint8_t current_color, previous_color, diverges_in;
   int x, y, previous_y_checkpoint;
   previous_y_checkpoint = 0;
@@ -129,7 +142,8 @@ void draw_fractal(const char* fractal_type) {  // TODO: add color argument
       kb_Scan();
       // TODO allow customizing the starting values
       diverges_in = calculate_divergence(x, y, -0.835, -0.2321, fractal_type);
-      current_color = blue_gradient_16[diverges_in];
+      current_color = gradients_16[gradient_idx][diverges_in];
+      // draw the line with previous color, then change colors
       if (current_color != previous_color) {
         gfx_SetColor(previous_color);
         gfx_Line(x, previous_y_checkpoint, x, y - 1);
@@ -151,8 +165,7 @@ void draw_fractal(const char* fractal_type) {  // TODO: add color argument
 // 2:25 -> 9:08
 int main(void) {
   // input detection
-  bool right;
-  bool left;
+  bool up, down, left, right;
   kb_key_t arrows;
   int8_t prevKey;
 
@@ -163,28 +176,43 @@ int main(void) {
   gfx_FillScreen(gfx_black);
 
   print_main_menu();
-  print_select_block(100, true, "Select type", choices[selected_choice_idx]);
+  print_select_block(70, true, selected_block_idx == 0, "Select type", choices[selected_choice_idx]);
+  print_select_block(120, true, selected_block_idx == 1, "Select color", gradients_names[selected_gradient_idx]);
 
   prevKey = 0;  // needed to avoid repetitions
   do {
     // Check for arrows
+    kb_Scan();
     arrows = kb_Data[7];
+    up = arrows & kb_Up;
+    down = arrows & kb_Down;
     right = arrows & kb_Right;
     left = arrows & kb_Left;
-    if ((left && prevKey != -1) || (right && prevKey != 1)) {
+    // TODO this is very bordel and repetitive
+    if ((left && prevKey != kb_Left) || (right && prevKey != kb_Right)) {
       // maxval is the number of elements minus one
-      selected_choice_idx = cyclic_var_shift(selected_choice_idx, right ? 1 : -1, 1);
-      print_select_block(100, false, "Select type", choices[selected_choice_idx]);
+      if (selected_block_idx == 0) {
+        selected_choice_idx = cyclic_var_shift(selected_choice_idx, right ? 1 : -1, 1);
+        print_select_block(70, false, true, "Select type", choices[selected_choice_idx]);
+      } else if (selected_block_idx == 1) {
+        selected_gradient_idx = cyclic_var_shift(selected_gradient_idx, right ? 1 : -1, 1);
+        print_select_block(120, false, true, "Select color", gradients_names[selected_gradient_idx]);
+      }
+    } else if ((up && prevKey != kb_Up) || (down && prevKey != kb_Down)) {
+      // changing selection of block
+      selected_block_idx = cyclic_var_shift(selected_block_idx, down ? 1 : -1, 1);
+      print_select_block(70, false, selected_block_idx == 0, "Select type", choices[selected_choice_idx]);
+      print_select_block(120, false, selected_block_idx == 1, "Select color", gradients_names[selected_gradient_idx]);
     }
-    prevKey = right ? 1 : (left ? -1 : 0);  // must do that here to avoid repetitions
-
+    prevKey = arrows;  // must do that here to avoid repetitions
     if (kb_Data[6] & kb_Clear) {
       gfx_End();
       return 0;
     }
-  } while (kb_Data[6] != kb_Enter);
 
-  draw_fractal(choices[selected_choice_idx]);
+  } while (!(kb_Data[6] & kb_Enter));
+
+  draw_fractal(choices[selected_choice_idx], selected_gradient_idx);
 
   while (!os_GetCSC());
   gfx_End();
